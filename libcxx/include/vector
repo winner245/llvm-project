@@ -454,12 +454,12 @@ public:
   }
 
   _LIBCPP_CONSTEXPR_SINCE_CXX20 _LIBCPP_HIDE_FROM_ABI explicit vector(size_type __n) {
-    auto __guard = std::__make_exception_guard(__destroy_vector(*this));
+    auto __guard = std::__make_exception_guard(__destroy_vector(*this));  // ctor 强异常安全保障：用 RAII guard 来保护 vector ctor，RAII guard ctor 负责关联一个 rollback 可调用对象 __destroy_vector(*this)，当构造过程抛出任何异常，RAII guard dtor 负责执行该可调用对象，将 vector rollback 到构造之前的空状态；如果构造成功结束，则 RAII guard 立即释放与 rollback 可调用对象的关联状态，随后其 dtor 什么也不做。
     if (__n > 0) {
-      __vallocate(__n);
+      __vallocate(__n);   			
       __construct_at_end(__n);
     }
-    __guard.__complete();
+    __guard.__complete();  // 一旦上述内存分配和构造过程抛出任何异常，此 RAII guard 会自动执行可调用对象 __destroy_vector 的 operator()，用于析构和释放内存！如果没有抛出异常，则此处调用 complete() 函数来 release 该 guard
   }
 
 #if _LIBCPP_STD_VER >= 14
@@ -487,7 +487,7 @@ public:
   _LIBCPP_CONSTEXPR_SINCE_CXX20 _LIBCPP_HIDE_FROM_ABI
   vector(size_type __n, const value_type& __x, const allocator_type& __a)
       : __alloc_(__a) {
-    if (__n > 0) {
+    if (__n > 0) {   // vector(n, x, a) 为什么缺少了 exception guard 的保护？？？
       __vallocate(__n);
       __construct_at_end(__n, __x);
     }
@@ -503,7 +503,7 @@ public:
                               is_constructible<value_type, typename iterator_traits<_InputIterator>::reference>::value,
                           int> = 0>
   _LIBCPP_CONSTEXPR_SINCE_CXX20 _LIBCPP_HIDE_FROM_ABI
-  vector(_InputIterator __first, _InputIterator __last, const allocator_type& __a);
+  vector(_InputIterator __first, _InputIterator __last, const allocator_type& __a);  // Range-ctor with input_iterator_tag
 
   template <
       class _ForwardIterator,
@@ -518,7 +518,7 @@ public:
                         is_constructible<value_type, typename iterator_traits<_ForwardIterator>::reference>::value,
                     int> = 0>
   _LIBCPP_CONSTEXPR_SINCE_CXX20 _LIBCPP_HIDE_FROM_ABI
-  vector(_ForwardIterator __first, _ForwardIterator __last, const allocator_type& __a);
+  vector(_ForwardIterator __first, _ForwardIterator __last, const allocator_type& __a);  // Range-ctor with forward_iterator_tag
 
 #if _LIBCPP_STD_VER >= 23
   template <_ContainerCompatibleRange<_Tp> _Range>
@@ -536,15 +536,15 @@ public:
 #endif
 
 private:
-  class __destroy_vector {
+  class __destroy_vector {  // __destroy_vector 作用是为了方便向 ctor RAII guard 传递一个能将 vector rollback 到构造之前的空状态的可调用对象的。
   public:
     _LIBCPP_CONSTEXPR _LIBCPP_HIDE_FROM_ABI __destroy_vector(vector& __vec) : __vec_(__vec) {}
 
     _LIBCPP_CONSTEXPR_SINCE_CXX20 _LIBCPP_HIDE_FROM_ABI void operator()() {
       if (__vec_.__begin_ != nullptr) {
-        __vec_.__clear();
-        __vec_.__annotate_delete();
-        __alloc_traits::deallocate(__vec_.__alloc(), __vec_.__begin_, __vec_.capacity());
+        __vec_.__clear();							// 析构 vector
+        __vec_.__annotate_delete();		// ASAN 调试
+        __alloc_traits::deallocate(__vec_.__alloc(), __vec_.__begin_, __vec_.capacity());		// 释放内存
       }
     }
 
@@ -726,7 +726,7 @@ public:
                               is_constructible< value_type, typename iterator_traits<_InputIterator>::reference>::value,
                           int> = 0>
   _LIBCPP_CONSTEXPR_SINCE_CXX20 _LIBCPP_HIDE_FROM_ABI iterator
-  insert(const_iterator __position, _InputIterator __first, _InputIterator __last);
+  insert(const_iterator __position, _InputIterator __first, _InputIterator __last);  // Range-insert for input_iterator_tag
 
 #if _LIBCPP_STD_VER >= 23
   template <_ContainerCompatibleRange<_Tp> _Range>
@@ -746,12 +746,12 @@ public:
       __enable_if_t<__has_forward_iterator_category<_ForwardIterator>::value &&
                         is_constructible< value_type, typename iterator_traits<_ForwardIterator>::reference>::value,
                     int> = 0>
-  _LIBCPP_CONSTEXPR_SINCE_CXX20 _LIBCPP_HIDE_FROM_ABI iterator
+  _LIBCPP_CONSTEXPR_SINCE_CXX20 _LIBCPP_HIDE_FROM_ABI iterator  // Range-insert for forward_iterator_tag
   insert(const_iterator __position, _ForwardIterator __first, _ForwardIterator __last);
 
 #ifndef _LIBCPP_CXX03_LANG
   _LIBCPP_CONSTEXPR_SINCE_CXX20 _LIBCPP_HIDE_FROM_ABI iterator
-  insert(const_iterator __position, initializer_list<value_type> __il) {
+  insert(const_iterator __position, initializer_list<value_type> __il) {  // {}-insert 
     return insert(__position, __il.begin(), __il.end());
   }
 #endif
@@ -780,7 +780,7 @@ public:
 private:
   pointer __begin_ = nullptr;
   pointer __end_   = nullptr;
-  _LIBCPP_COMPRESSED_PAIR(pointer, __cap_ = nullptr, allocator_type, __alloc_);
+  _LIBCPP_COMPRESSED_PAIR(pointer, __cap_ = nullptr, allocator_type, __alloc_);  // 此处相当于用 [[no_unique_address]] 来定义了 __cap_, __alloc_ 两个成员，故这两个成员是 vector 的顶层成员，可以直接访问！不再需要 __alloc() 和 __end_cap() 这些 getter 函数了！
 
   //  Allocate space for __n objects
   //  throws length_error if __n > max_size()
@@ -892,7 +892,7 @@ private:
       _NOEXCEPT_(is_nothrow_move_assignable<allocator_type>::value);
   _LIBCPP_CONSTEXPR_SINCE_CXX20 _LIBCPP_HIDE_FROM_ABI void __move_assign(vector& __c, false_type)
       _NOEXCEPT_(__alloc_traits::is_always_equal::value);
-  _LIBCPP_CONSTEXPR_SINCE_CXX20 _LIBCPP_HIDE_FROM_ABI void __destruct_at_end(pointer __new_last) _NOEXCEPT {
+  _LIBCPP_CONSTEXPR_SINCE_CXX20 _LIBCPP_HIDE_FROM_ABI void __destruct_at_end(pointer __new_last) _NOEXCEPT { // 将尾部区间 [__new_last, __end_) 析构，析构结束后，this->__end_ = __new_last
     size_type __old_size = size();
     __base_destruct_at_end(__new_last);
     __annotate_shrink(__old_size);
@@ -961,9 +961,9 @@ private:
 #endif
     }
 
-    vector& __v_;
-    pointer __pos_;
-    const_pointer const __new_end_;
+    vector& __v_;			// 通过引用来关联 vector
+    pointer __pos_;		// __pos 用于记录 vector 构造操作截止到的位置
+    const_pointer const __new_end_;		// __new_end 是常量，即不会改变，它记录的是当 vector 整个构造过程没有任何异常时能顺利截止到的最大位置
 
     _ConstructTransaction(_ConstructTransaction const&)            = delete;
     _ConstructTransaction& operator=(_ConstructTransaction const&) = delete;
@@ -973,10 +973,10 @@ private:
   _LIBCPP_CONSTEXPR_SINCE_CXX20 _LIBCPP_HIDE_FROM_ABI void __construct_one_at_end(_Args&&... __args) {
     _ConstructTransaction __tx(*this, 1);
     __alloc_traits::construct(this->__alloc(), std::__to_address(__tx.__pos_), std::forward<_Args>(__args)...);
-    ++__tx.__pos_;
+    ++__tx.__pos_;  // _ConstructTransaction 通过 RAII 确保了不论是否有异常，都更新关联 vector 的 __end_ 指针到构造操作结束到的位置 __pos_
   }
 
-  // TODO: Remove these now redundant accessors
+  // TODO: Remove these now redundant accessors  正是由于从 clang 19 开始 __cap_ 和 __alloc_ 已经成为 vector 的顶层成员，故这些 getters 函数 __cap(), __alloc() 就不再需要了！
   _LIBCPP_CONSTEXPR_SINCE_CXX20 _LIBCPP_HIDE_FROM_ABI allocator_type& __alloc() _NOEXCEPT { return this->__alloc_; }
   _LIBCPP_CONSTEXPR_SINCE_CXX20 _LIBCPP_HIDE_FROM_ABI const allocator_type& __alloc() const _NOEXCEPT {
     return this->__alloc_;
@@ -991,20 +991,20 @@ private:
   }
 
   _LIBCPP_CONSTEXPR_SINCE_CXX20 _LIBCPP_HIDE_FROM_ABI void __base_destruct_at_end(pointer __new_last) _NOEXCEPT {
-    pointer __soon_to_be_end = this->__end_;
+    pointer __soon_to_be_end = this->__end_;  // 将尾部区间 [__new_last, __end_) 从尾部向前析构 (反序析构)，析构结束后，this->__end_ = __new_last
     while (__new_last != __soon_to_be_end)
       __alloc_traits::destroy(__alloc(), std::__to_address(--__soon_to_be_end));
     this->__end_ = __new_last;
   }
 
-  _LIBCPP_CONSTEXPR_SINCE_CXX20 _LIBCPP_HIDE_FROM_ABI void __copy_assign_alloc(const vector& __c) {
-    __copy_assign_alloc(__c, integral_constant<bool, __alloc_traits::propagate_on_container_copy_assignment::value>());
+  _LIBCPP_CONSTEXPR_SINCE_CXX20 _LIBCPP_HIDE_FROM_ABI void __copy_assign_alloc(const vector& __c) { // 仅当 allocator 支持 copy-asgn 才将 RHS allocator 拷贝赋值给 LHS allocator，否则，什么也不做，坚持使用 LHS 自身 allocator。但在对 LHS allocator 做赋值修改之前，如果 LHS 与 RHS allocator 原本 compare unequal，此函数会确保先用 LHS allocator 析构 LHS vector 并释放其内存！
+    __copy_assign_alloc(__c, integral_constant<bool, __alloc_traits::propagate_on_container_copy_assignment::value>());  // tag dispatching
   }
 
-  _LIBCPP_CONSTEXPR_SINCE_CXX20 _LIBCPP_HIDE_FROM_ABI void __move_assign_alloc(vector& __c)
+  _LIBCPP_CONSTEXPR_SINCE_CXX20 _LIBCPP_HIDE_FROM_ABI void __move_assign_alloc(vector& __c)  // 仅当 allocator 支持 move-asgn 才将 RHS allocator 移动赋值给 LHS allocator，否则，什么也不做，坚持使用 LHS 自身 allocator。
       _NOEXCEPT_(!__alloc_traits::propagate_on_container_move_assignment::value ||
                  is_nothrow_move_assignable<allocator_type>::value) {
-    __move_assign_alloc(__c, integral_constant<bool, __alloc_traits::propagate_on_container_move_assignment::value>());
+    __move_assign_alloc(__c, integral_constant<bool, __alloc_traits::propagate_on_container_move_assignment::value>());  // tag dispatching
   }
 
   [[__noreturn__]] _LIBCPP_HIDE_FROM_ABI void __throw_length_error() const { std::__throw_length_error("vector"); }
@@ -1012,7 +1012,7 @@ private:
   [[__noreturn__]] _LIBCPP_HIDE_FROM_ABI void __throw_out_of_range() const { std::__throw_out_of_range("vector"); }
 
   _LIBCPP_CONSTEXPR_SINCE_CXX20 _LIBCPP_HIDE_FROM_ABI void __copy_assign_alloc(const vector& __c, true_type) {
-    if (__alloc() != __c.__alloc()) {
+    if (__alloc() != __c.__alloc()) {  // 当 allocator 支持 copy-asgn，且 LHS 与 RHS allocator compare unequal 时，在对 LHS allocator 赋值修改之前，会确保先用 LHS allocator 析构 LHS vector 并释放其内存！但这部分操作又和 __vdeallocate() 或 __destroy_vector 造成了代码重复！！但可以肯定的是，至少这部分代码可以换成直接调用 __vdeallocate()!!! code cleanup!!!
       __clear();
       __annotate_delete();
       __alloc_traits::deallocate(__alloc(), this->__begin_, capacity());
@@ -1021,14 +1021,14 @@ private:
     __alloc() = __c.__alloc();
   }
 
-  _LIBCPP_CONSTEXPR_SINCE_CXX20 _LIBCPP_HIDE_FROM_ABI void __copy_assign_alloc(const vector&, false_type) {}
+  _LIBCPP_CONSTEXPR_SINCE_CXX20 _LIBCPP_HIDE_FROM_ABI void __copy_assign_alloc(const vector&, false_type) {}  // 当 allocator 不支持 copy-asgn 时，什么也不做，坚持使用 LHS 自身 allocator！
 
   _LIBCPP_CONSTEXPR_SINCE_CXX20 _LIBCPP_HIDE_FROM_ABI void __move_assign_alloc(vector& __c, true_type)
       _NOEXCEPT_(is_nothrow_move_assignable<allocator_type>::value) {
     __alloc() = std::move(__c.__alloc());
   }
 
-  _LIBCPP_CONSTEXPR_SINCE_CXX20 _LIBCPP_HIDE_FROM_ABI void __move_assign_alloc(vector&, false_type) _NOEXCEPT {}
+  _LIBCPP_CONSTEXPR_SINCE_CXX20 _LIBCPP_HIDE_FROM_ABI void __move_assign_alloc(vector&, false_type) _NOEXCEPT {}  // 当 allocator 不支持 move-asgn 时，什么也不做，坚持使用 LHS 自身 allocator！
 };
 
 #if _LIBCPP_STD_VER >= 17
@@ -1057,14 +1057,14 @@ vector(from_range_t, _Range&&, _Alloc = _Alloc()) -> vector<ranges::range_value_
 // function has a strong exception guarantee.
 template <class _Tp, class _Allocator>
 _LIBCPP_CONSTEXPR_SINCE_CXX20 void
-vector<_Tp, _Allocator>::__swap_out_circular_buffer(__split_buffer<value_type, allocator_type&>& __v) {
+vector<_Tp, _Allocator>::__swap_out_circular_buffer(__split_buffer<value_type, allocator_type&>& __v) {  // 此函数专门用于 vector 尾部插入导致需要扩容的情形：此函数的 precondition 是假设 vector 尾部插入的元素已经插入到此 buffer 的 __end_-1 位置了，且此 buffer 在头部已预留了恰好能容纳 vector 现有元素的空间。于是，此函数先将 vector 旧元素全部批量移动 or 拷贝到此 buffer，最后将此 buffer 内存与 vector 旧内存 swap。
   __annotate_delete();
-  auto __new_begin = __v.__begin_ - (__end_ - __begin_);
+  auto __new_begin = __v.__begin_ - (__end_ - __begin_);  // 直接用 __v.__first_ 更合适，少一步减法！毕竟连上面的 comment 都说了这个函数假定其头部剩余空间敲好等于 __end_ - __begin_ (此外在 push_back() 和 emplace_back() 中发起对此函数的调用都是在头部特地空出了 size() 的空间)，那这里直接用 __v.__first_ 显然更合适！
   std::__uninitialized_allocator_relocate(
-      __alloc(), std::__to_address(__begin_), std::__to_address(__end_), std::__to_address(__new_begin));
+      __alloc(), std::__to_address(__begin_), std::__to_address(__end_), std::__to_address(__new_begin));  // 将 vector 所有旧元素批量移动 (if noexcept) or 批量拷贝至 buffer 头部
   __v.__begin_ = __new_begin;
   __end_       = __begin_; // All the objects have been destroyed by relocating them.
-  std::swap(this->__begin_, __v.__begin_);
+  std::swap(this->__begin_, __v.__begin_);  // 将 buffer 底部内存与 vector 旧内存交换，无需交换 allocator，因为 buffer 使用的是与 vector 相同 allocator！
   std::swap(this->__end_, __v.__end_);
   std::swap(this->__end_cap(), __v.__end_cap());
   __v.__first_ = __v.__begin_;
@@ -1077,20 +1077,20 @@ vector<_Tp, _Allocator>::__swap_out_circular_buffer(__split_buffer<value_type, a
 // function has a strong exception guarantee if __begin_ == __p || __end_ == __p.
 template <class _Tp, class _Allocator>
 _LIBCPP_CONSTEXPR_SINCE_CXX20 typename vector<_Tp, _Allocator>::pointer
-vector<_Tp, _Allocator>::__swap_out_circular_buffer(__split_buffer<value_type, allocator_type&>& __v, pointer __p) {
+vector<_Tp, _Allocator>::__swap_out_circular_buffer(__split_buffer<value_type, allocator_type&>& __v, pointer __p) { // 此函数专门用于 vector 中间位置 p 插入导致需要扩容的情形：此函数的 precondition 是假设 vector 中间插入的元素已经被插入到此 buffer 的中间位置 [__begin_, __end_) 了，且此 buffer 在头部已预留了恰好能容纳 vector 头部 [vec.begin(), p) 现有元素的空间，且尾部预留了至少能容纳 vector 尾部 [p, vec.end()) 现有元素的空间。于是，此函数先将 vector 尾部旧元素 [p, end) 批量移动 or 拷贝到此 buffer 尾部，将 vector 头部旧元素 [begin, p) 批量移动 or 拷贝到此 buffer 尾部，最后将此 buffer 内存与 vector 旧内存 swap。
   __annotate_delete();
   pointer __ret = __v.__begin_;
 
   // Relocate [__p, __end_) first to avoid having a hole in [__begin_, __end_)
   // in case something in [__begin_, __p) throws.
   std::__uninitialized_allocator_relocate(
-      __alloc(), std::__to_address(__p), std::__to_address(__end_), std::__to_address(__v.__end_));
+      __alloc(), std::__to_address(__p), std::__to_address(__end_), std::__to_address(__v.__end_));  // 先将 vector 后半段旧元素 [__p, __end_) 批量移动 (if noexcept) or 批量拷贝至 buffer 尾部
   __v.__end_ += (__end_ - __p);
   __end_           = __p; // The objects in [__p, __end_) have been destroyed by relocating them.
   auto __new_begin = __v.__begin_ - (__p - __begin_);
 
   std::__uninitialized_allocator_relocate(
-      __alloc(), std::__to_address(__begin_), std::__to_address(__p), std::__to_address(__new_begin));
+      __alloc(), std::__to_address(__begin_), std::__to_address(__p), std::__to_address(__new_begin));  // 再将 vector 前半段旧元素 [__begin_, __p) 批量移动 (if noexcept) or 批量拷贝至 buffer 头部
   __v.__begin_ = __new_begin;
   __end_       = __begin_; // All the objects have been destroyed by relocating them.
 
@@ -1103,7 +1103,7 @@ vector<_Tp, _Allocator>::__swap_out_circular_buffer(__split_buffer<value_type, a
 }
 
 template <class _Tp, class _Allocator>
-_LIBCPP_CONSTEXPR_SINCE_CXX20 void vector<_Tp, _Allocator>::__vdeallocate() _NOEXCEPT {
+_LIBCPP_CONSTEXPR_SINCE_CXX20 void vector<_Tp, _Allocator>::__vdeallocate() _NOEXCEPT {  // 析构和释放 vector 内存，结束后将底部三根指针设置为 nullptr。本函数代码与 __destroy_vector 内部代码重复！除了比 __destroy_vector 多了将三根指针设置为 nullptr！而 __destroy_vector 结束后，只有 __end_ = __begin_ != nullptr, 且 __end_cap() 也不是 nullptr！
   if (this->__begin_ != nullptr) {
     clear();
     __annotate_delete();
@@ -1128,7 +1128,7 @@ vector<_Tp, _Allocator>::__recommend(size_type __new_size) const {
   const size_type __cap = capacity();
   if (__cap >= __ms / 2)
     return __ms;
-  return std::max<size_type>(2 * __cap, __new_size);
+  return std::max<size_type>(2 * __cap, __new_size);  // 在 2 倍扩容和 new_size 之间去最大值
 }
 
 //  Default constructs __n objects starting at __end_
@@ -1205,7 +1205,7 @@ template <class _Tp, class _Allocator>
 template <class _InputIterator,
           __enable_if_t<__has_exactly_input_iterator_category<_InputIterator>::value &&
                             is_constructible<_Tp, typename iterator_traits<_InputIterator>::reference>::value,
-                        int> >
+                        int> >   // Range-ctor with input_iterator_tag
 _LIBCPP_CONSTEXPR_SINCE_CXX20 vector<_Tp, _Allocator>::vector(_InputIterator __first, _InputIterator __last) {
   __init_with_sentinel(__first, __last);
 }
@@ -1214,7 +1214,7 @@ template <class _Tp, class _Allocator>
 template <class _InputIterator,
           __enable_if_t<__has_exactly_input_iterator_category<_InputIterator>::value &&
                             is_constructible<_Tp, typename iterator_traits<_InputIterator>::reference>::value,
-                        int> >
+                        int> >   // Range-ctor with input_iterator_tag
 _LIBCPP_CONSTEXPR_SINCE_CXX20
 vector<_Tp, _Allocator>::vector(_InputIterator __first, _InputIterator __last, const allocator_type& __a)
     : __alloc_(__a) {
@@ -1225,7 +1225,7 @@ template <class _Tp, class _Allocator>
 template <class _ForwardIterator,
           __enable_if_t<__has_forward_iterator_category<_ForwardIterator>::value &&
                             is_constructible<_Tp, typename iterator_traits<_ForwardIterator>::reference>::value,
-                        int> >
+                        int> >   // Range-ctor with forward_iterator_tag
 _LIBCPP_CONSTEXPR_SINCE_CXX20 vector<_Tp, _Allocator>::vector(_ForwardIterator __first, _ForwardIterator __last) {
   size_type __n = static_cast<size_type>(std::distance(__first, __last));
   __init_with_size(__first, __last, __n);
@@ -1235,7 +1235,7 @@ template <class _Tp, class _Allocator>
 template <class _ForwardIterator,
           __enable_if_t<__has_forward_iterator_category<_ForwardIterator>::value &&
                             is_constructible<_Tp, typename iterator_traits<_ForwardIterator>::reference>::value,
-                        int> >
+                        int> >  // Range-ctor with forward_iterator_tag
 _LIBCPP_CONSTEXPR_SINCE_CXX20
 vector<_Tp, _Allocator>::vector(_ForwardIterator __first, _ForwardIterator __last, const allocator_type& __a)
     : __alloc_(__a) {
@@ -1244,21 +1244,21 @@ vector<_Tp, _Allocator>::vector(_ForwardIterator __first, _ForwardIterator __las
 }
 
 template <class _Tp, class _Allocator>
-_LIBCPP_CONSTEXPR_SINCE_CXX20 vector<_Tp, _Allocator>::vector(const vector& __x)
+_LIBCPP_CONSTEXPR_SINCE_CXX20 vector<_Tp, _Allocator>::vector(const vector& __x)  // Copy-ctor
     : __alloc_(__alloc_traits::select_on_container_copy_construction(__x.__alloc())) {
   __init_with_size(__x.__begin_, __x.__end_, __x.size());
 }
 
 template <class _Tp, class _Allocator>
 _LIBCPP_CONSTEXPR_SINCE_CXX20
-vector<_Tp, _Allocator>::vector(const vector& __x, const __type_identity_t<allocator_type>& __a)
+vector<_Tp, _Allocator>::vector(const vector& __x, const __type_identity_t<allocator_type>& __a)  // Copy-ctor with alternative allocator
     : __alloc_(__a) {
   __init_with_size(__x.__begin_, __x.__end_, __x.size());
 }
 
 template <class _Tp, class _Allocator>
-_LIBCPP_CONSTEXPR_SINCE_CXX20 inline _LIBCPP_HIDE_FROM_ABI vector<_Tp, _Allocator>::vector(vector&& __x)
-#if _LIBCPP_STD_VER >= 17
+_LIBCPP_CONSTEXPR_SINCE_CXX20 inline _LIBCPP_HIDE_FROM_ABI vector<_Tp, _Allocator>::vector(vector&& __x)  // Move-ctor
+#if _LIBCPP_STD_VER >= 17  // Move-ctor 能提供 noexcept exception safety 保障！
     noexcept
 #else
     _NOEXCEPT_(is_nothrow_move_constructible<allocator_type>::value)
@@ -1266,15 +1266,15 @@ _LIBCPP_CONSTEXPR_SINCE_CXX20 inline _LIBCPP_HIDE_FROM_ABI vector<_Tp, _Allocato
     : __alloc_(std::move(__x.__alloc())) {
   this->__begin_    = __x.__begin_;
   this->__end_      = __x.__end_;
-  this->__end_cap() = __x.__end_cap();
-  __x.__begin_ = __x.__end_ = __x.__end_cap() = nullptr;
+  this->__end_cap() = __x.__end_cap();   									// 抢占 RHS 资源
+  __x.__begin_ = __x.__end_ = __x.__end_cap() = nullptr;  // 解绑 RHS 资源
 }
 
 template <class _Tp, class _Allocator>
 _LIBCPP_CONSTEXPR_SINCE_CXX20 inline _LIBCPP_HIDE_FROM_ABI
-vector<_Tp, _Allocator>::vector(vector&& __x, const __type_identity_t<allocator_type>& __a)
+vector<_Tp, _Allocator>::vector(vector&& __x, const __type_identity_t<allocator_type>& __a)  // move-ctor with alternative allocator
     : __alloc_(__a) {
-  if (__a == __x.__alloc()) {
+  if (__a == __x.__alloc()) {  // 当 RHS vector allocator 与指定 alternative allocator compare equal 时，才能抢占 RHS 资源；否则，必须用指定 allocator 重新分配内存，这里通过调用 assign() 实现，它内部会自动负责分配内存。
     this->__begin_    = __x.__begin_;
     this->__end_      = __x.__end_;
     this->__end_cap() = __x.__end_cap();
@@ -1282,7 +1282,7 @@ vector<_Tp, _Allocator>::vector(vector&& __x, const __type_identity_t<allocator_
   } else {
     typedef move_iterator<iterator> _Ip;
     auto __guard = std::__make_exception_guard(__destroy_vector(*this));
-    assign(_Ip(__x.begin()), _Ip(__x.end()));
+    assign(_Ip(__x.begin()), _Ip(__x.end()));  // 通过 move_iterator 实现了 element-wise move
     __guard.__complete();
   }
 }
@@ -1302,7 +1302,7 @@ vector<_Tp, _Allocator>::vector(initializer_list<value_type> __il) {
 
 template <class _Tp, class _Allocator>
 _LIBCPP_CONSTEXPR_SINCE_CXX20 inline _LIBCPP_HIDE_FROM_ABI
-vector<_Tp, _Allocator>::vector(initializer_list<value_type> __il, const allocator_type& __a)
+vector<_Tp, _Allocator>::vector(initializer_list<value_type> __il, const allocator_type& __a)  // {}-ctor
     : __alloc_(__a) {
   auto __guard = std::__make_exception_guard(__destroy_vector(*this));
   if (__il.size() > 0) {
@@ -1316,26 +1316,26 @@ vector<_Tp, _Allocator>::vector(initializer_list<value_type> __il, const allocat
 
 template <class _Tp, class _Allocator>
 _LIBCPP_CONSTEXPR_SINCE_CXX20 inline _LIBCPP_HIDE_FROM_ABI vector<_Tp, _Allocator>&
-vector<_Tp, _Allocator>::operator=(vector&& __x)
+vector<_Tp, _Allocator>::operator=(vector&& __x)   // Move-asgn optr
     _NOEXCEPT_(__noexcept_move_assign_container<_Allocator, __alloc_traits>::value) {
-  __move_assign(__x, integral_constant<bool, __alloc_traits::propagate_on_container_move_assignment::value>());
+  __move_assign(__x, integral_constant<bool, __alloc_traits::propagate_on_container_move_assignment::value>());  // tag dispatching
   return *this;
 }
 
 template <class _Tp, class _Allocator>
-_LIBCPP_CONSTEXPR_SINCE_CXX20 void vector<_Tp, _Allocator>::__move_assign(vector& __c, false_type)
+_LIBCPP_CONSTEXPR_SINCE_CXX20 void vector<_Tp, _Allocator>::__move_assign(vector& __c, false_type)  // 当 allocator 不支持 move-asgn
     _NOEXCEPT_(__alloc_traits::is_always_equal::value) {
-  if (__alloc() != __c.__alloc()) {
+  if (__alloc() != __c.__alloc()) {  // 当 allcator 既不支持 move-asgn，又不 compare equal，则只能坚持使用 LHS 自身 allocator！此时有机会 reuse LHS 自身内存！此处通过调用 assign() 函数来自动进行按需内存分配！且通过 move_iterator 实现了 O(n) element-wise move-asgn
     typedef move_iterator<iterator> _Ip;
     assign(_Ip(__c.begin()), _Ip(__c.end()));
-  } else
+  } else  // 尽管 allocator 不支持 move-asgn，但 LHS 与 RHS vector 的 allocator compare equal，故依然能直接抢占 RHS 资源 => O(1) vector-wsie move-asgn
     __move_assign(__c, true_type());
 }
 
 template <class _Tp, class _Allocator>
-_LIBCPP_CONSTEXPR_SINCE_CXX20 void vector<_Tp, _Allocator>::__move_assign(vector& __c, true_type)
+_LIBCPP_CONSTEXPR_SINCE_CXX20 void vector<_Tp, _Allocator>::__move_assign(vector& __c, true_type)  // 当 allocator 支持 move-asgn => O(1) vector-wsie move-asgn
     _NOEXCEPT_(is_nothrow_move_assignable<allocator_type>::value) {
-  __vdeallocate();
+  __vdeallocate();  // 析构 vector 并释放其内存
   __move_assign_alloc(__c); // this can throw
   this->__begin_    = __c.__begin_;
   this->__end_      = __c.__end_;
@@ -1345,9 +1345,9 @@ _LIBCPP_CONSTEXPR_SINCE_CXX20 void vector<_Tp, _Allocator>::__move_assign(vector
 
 template <class _Tp, class _Allocator>
 _LIBCPP_CONSTEXPR_SINCE_CXX20 inline _LIBCPP_HIDE_FROM_ABI vector<_Tp, _Allocator>&
-vector<_Tp, _Allocator>::operator=(const vector& __x) {
+vector<_Tp, _Allocator>::operator=(const vector& __x) {   // Copy-asgn optr
   if (this != std::addressof(__x)) {
-    __copy_assign_alloc(__x);
+    __copy_assign_alloc(__x);  // 当 allocator 支持 copy-asgn，且 LHS 与 RHS allocator compare unequal 时，此函数内部会在对 LHS allocator 赋值修改之前，会确保先用 LHS allocator 析构 LHS vector 并释放其内存！
     assign(__x.__begin_, __x.__end_);
   }
   return *this;
@@ -1357,7 +1357,7 @@ template <class _Tp, class _Allocator>
 template <class _InputIterator,
           __enable_if_t<__has_exactly_input_iterator_category<_InputIterator>::value &&
                             is_constructible<_Tp, typename iterator_traits<_InputIterator>::reference>::value,
-                        int> >
+                        int> >   // Range-asgn with input_iterator_tag
 _LIBCPP_CONSTEXPR_SINCE_CXX20 void vector<_Tp, _Allocator>::assign(_InputIterator __first, _InputIterator __last) {
   __assign_with_sentinel(__first, __last);
 }
@@ -1375,7 +1375,7 @@ template <class _Tp, class _Allocator>
 template <class _ForwardIterator,
           __enable_if_t<__has_forward_iterator_category<_ForwardIterator>::value &&
                             is_constructible<_Tp, typename iterator_traits<_ForwardIterator>::reference>::value,
-                        int> >
+                        int> >  // Range-asgn with forward_iterator_tag
 _LIBCPP_CONSTEXPR_SINCE_CXX20 void vector<_Tp, _Allocator>::assign(_ForwardIterator __first, _ForwardIterator __last) {
   __assign_with_size(__first, __last, std::distance(__first, __last));
 }
@@ -1386,15 +1386,15 @@ _LIBCPP_CONSTEXPR_SINCE_CXX20 _LIBCPP_HIDE_FROM_ABI void
 vector<_Tp, _Allocator>::__assign_with_size(_ForwardIterator __first, _Sentinel __last, difference_type __n) {
   size_type __new_size = static_cast<size_type>(__n);
   if (__new_size <= capacity()) {
-    if (__new_size > size()) {
+    if (__new_size > size()) {  // case 1: size() < __new_size <= capacity()
       _ForwardIterator __mid = std::next(__first, size());
       std::copy(__first, __mid, this->__begin_);
       __construct_at_end(__mid, __last, __new_size - size());
-    } else {
+    } else {  // case 2: __new_size <= size()
       pointer __m = std::__copy<_ClassicAlgPolicy>(__first, __last, this->__begin_).second;
       this->__destruct_at_end(__m);
     }
-  } else {
+  } else {  // case 3: __new_size > capacity()
     __vdeallocate();
     __vallocate(__recommend(__new_size));
     __construct_at_end(__first, __last, __new_size);
@@ -1402,15 +1402,15 @@ vector<_Tp, _Allocator>::__assign_with_size(_ForwardIterator __first, _Sentinel 
 }
 
 template <class _Tp, class _Allocator>
-_LIBCPP_CONSTEXPR_SINCE_CXX20 void vector<_Tp, _Allocator>::assign(size_type __n, const_reference __u) {
+_LIBCPP_CONSTEXPR_SINCE_CXX20 void vector<_Tp, _Allocator>::assign(size_type __n, const_reference __u) {   // Batch-asgn
   if (__n <= capacity()) {
     size_type __s = size();
     std::fill_n(this->__begin_, std::min(__n, __s), __u);
-    if (__n > __s)
+    if (__n > __s)  // case 1: size() < __n <= capacity()
       __construct_at_end(__n - __s, __u);
-    else
+    else  // case 2: __n <= size()
       this->__destruct_at_end(this->__begin_ + __n);
-  } else {
+  } else {  // case 3: __n > capacity()
     __vdeallocate();
     __vallocate(__recommend(static_cast<size_type>(__n)));
     __construct_at_end(__n, __u);
@@ -1472,7 +1472,7 @@ vector<_Tp, _Allocator>::at(size_type __n) const {
 
 template <class _Tp, class _Allocator>
 _LIBCPP_CONSTEXPR_SINCE_CXX20 void vector<_Tp, _Allocator>::reserve(size_type __n) {
-  if (__n > capacity()) {
+  if (__n > capacity()) {  // reserve() 只能增加，不能减小 capacity()
     if (__n > max_size())
       this->__throw_length_error();
     allocator_type& __a = this->__alloc();
@@ -1504,9 +1504,9 @@ _LIBCPP_CONSTEXPR_SINCE_CXX20 void vector<_Tp, _Allocator>::shrink_to_fit() _NOE
 template <class _Tp, class _Allocator>
 template <class _Up>
 _LIBCPP_CONSTEXPR_SINCE_CXX20 typename vector<_Tp, _Allocator>::pointer
-vector<_Tp, _Allocator>::__push_back_slow_path(_Up&& __x) {
-  allocator_type& __a = this->__alloc();
-  __split_buffer<value_type, allocator_type&> __v(__recommend(size() + 1), size(), __a);
+vector<_Tp, _Allocator>::__push_back_slow_path(_Up&& __x) {  // 处理需要扩容的尾部插入
+  allocator_type& __a = this->__alloc();  // 使用与 vector 相同的 allocator 来构造 __split_buffer
+  __split_buffer<value_type, allocator_type&> __v(__recommend(size() + 1), size(), __a);  // 构造 buffer 容量 = max(2*cap, sz+1)，并设置 __v.__begin_ = __v._end_ = __v.__first_ + sz，其目的是让前面空出 sz 个位置，容纳旧 vector 搬移过来的元素，同时停留在 sz 位置用于插入下一个新元素
   // __v.push_back(std::forward<_Up>(__x));
   __alloc_traits::construct(__a, std::__to_address(__v.__end_), std::forward<_Up>(__x));
   __v.__end_++;
@@ -1516,7 +1516,7 @@ vector<_Tp, _Allocator>::__push_back_slow_path(_Up&& __x) {
 
 template <class _Tp, class _Allocator>
 _LIBCPP_CONSTEXPR_SINCE_CXX20 inline _LIBCPP_HIDE_FROM_ABI void
-vector<_Tp, _Allocator>::push_back(const_reference __x) {
+vector<_Tp, _Allocator>::push_back(const_reference __x) {  // 左值引用版
   pointer __end = this->__end_;
   if (__end < this->__end_cap()) {
     __construct_one_at_end(__x);
@@ -1524,11 +1524,11 @@ vector<_Tp, _Allocator>::push_back(const_reference __x) {
   } else {
     __end = __push_back_slow_path(__x);
   }
-  this->__end_ = __end;
+  this->__end_ = __end; // 这句完全多余！应该在 else 分支中直接对 this->__end_ 赋值；另外，在 if 分支中，__construct_one_at_end() 内部也会通过 RAII 来自动更新好了 this->_end_，此处再次更新是 redundant！
 }
 
 template <class _Tp, class _Allocator>
-_LIBCPP_CONSTEXPR_SINCE_CXX20 inline _LIBCPP_HIDE_FROM_ABI void vector<_Tp, _Allocator>::push_back(value_type&& __x) {
+_LIBCPP_CONSTEXPR_SINCE_CXX20 inline _LIBCPP_HIDE_FROM_ABI void vector<_Tp, _Allocator>::push_back(value_type&& __x) {  // 右值引用版
   pointer __end = this->__end_;
   if (__end < this->__end_cap()) {
     __construct_one_at_end(std::move(__x));
@@ -1536,13 +1536,13 @@ _LIBCPP_CONSTEXPR_SINCE_CXX20 inline _LIBCPP_HIDE_FROM_ABI void vector<_Tp, _All
   } else {
     __end = __push_back_slow_path(std::move(__x));
   }
-  this->__end_ = __end;
+  this->__end_ = __end;  // 这句完全多余！原因同上！
 }
 
 template <class _Tp, class _Allocator>
 template <class... _Args>
 _LIBCPP_CONSTEXPR_SINCE_CXX20 typename vector<_Tp, _Allocator>::pointer
-vector<_Tp, _Allocator>::__emplace_back_slow_path(_Args&&... __args) {
+vector<_Tp, _Allocator>::__emplace_back_slow_path(_Args&&... __args) {  // 处理需要扩容的尾部插入
   allocator_type& __a = this->__alloc();
   __split_buffer<value_type, allocator_type&> __v(__recommend(size() + 1), size(), __a);
   //    __v.emplace_back(std::forward<_Args>(__args)...);
@@ -1568,7 +1568,7 @@ _LIBCPP_CONSTEXPR_SINCE_CXX20 inline
   } else {
     __end = __emplace_back_slow_path(std::forward<_Args>(__args)...);
   }
-  this->__end_ = __end;
+  this->__end_ = __end;  // 这行多余！理由与 push_back() 中相同！
 #if _LIBCPP_STD_VER >= 17
   return *(__end - 1);
 #endif
@@ -1582,18 +1582,18 @@ _LIBCPP_CONSTEXPR_SINCE_CXX20 inline void vector<_Tp, _Allocator>::pop_back() {
 
 template <class _Tp, class _Allocator>
 _LIBCPP_CONSTEXPR_SINCE_CXX20 inline _LIBCPP_HIDE_FROM_ABI typename vector<_Tp, _Allocator>::iterator
-vector<_Tp, _Allocator>::erase(const_iterator __position) {
+vector<_Tp, _Allocator>::erase(const_iterator __position) {  // single-erase
   _LIBCPP_ASSERT_VALID_ELEMENT_ACCESS(
       __position != end(), "vector::erase(iterator) called with a non-dereferenceable iterator");
   difference_type __ps = __position - cbegin();
   pointer __p          = this->__begin_ + __ps;
-  this->__destruct_at_end(std::move(__p + 1, this->__end_, __p));
+  this->__destruct_at_end(std::move(__p + 1, this->__end_, __p));  // 将尾部区间整体前移一位，再析构最尾部元素
   return __make_iter(__p);
 }
 
 template <class _Tp, class _Allocator>
 _LIBCPP_CONSTEXPR_SINCE_CXX20 typename vector<_Tp, _Allocator>::iterator
-vector<_Tp, _Allocator>::erase(const_iterator __first, const_iterator __last) {
+vector<_Tp, _Allocator>::erase(const_iterator __first, const_iterator __last) {  
   _LIBCPP_ASSERT_VALID_INPUT_RANGE(__first <= __last, "vector::erase(first, last) called with invalid range");
   pointer __p = this->__begin_ + (__first - begin());
   if (__first != __last) {
@@ -1604,45 +1604,45 @@ vector<_Tp, _Allocator>::erase(const_iterator __first, const_iterator __last) {
 
 template <class _Tp, class _Allocator>
 _LIBCPP_CONSTEXPR_SINCE_CXX20 void
-vector<_Tp, _Allocator>::__move_range(pointer __from_s, pointer __from_e, pointer __to) {
+vector<_Tp, _Allocator>::__move_range(pointer __from_s, pointer __from_e, pointer __to) {  // 将 vector 尾部区间 [__from_s, __from_e) 整体向后移动到 [to, to+N) 位置。此函数的 precondition 是假设满足 from_s < to <= __end_, 即 vector 批量插入函数的插入元素个数不超过尾部现有元素个数。此函数在将尾部区间整体向右移动时会分别考虑移动后进入未初始化内存的子段和移动后仍位于尾部已初始化内存的子段。故 [__from_s, __from_e) 被拆分为两段，后半段恰好移入未初始化内存 (故这段用 construct() 来构造)，前半段向右移动到恰好仍位于已初始化内存 (故这段用 move_backward() 来移动赋值)。
   pointer __old_last  = this->__end_;
-  difference_type __n = __old_last - __to;
+  difference_type __n = __old_last - __to;  // to < __end_
   {
     pointer __i = __from_s + __n;
     _ConstructTransaction __tx(*this, __from_e - __i);
-    for (pointer __pos = __tx.__pos_; __i < __from_e; ++__i, (void)++__pos, __tx.__pos_ = __pos) {
+    for (pointer __pos = __tx.__pos_; __i < __from_e; ++__i, (void)++__pos, __tx.__pos_ = __pos) {  // 后半段恰好移入未初始化内存 => 用 construct() 来构造
       __alloc_traits::construct(this->__alloc(), std::__to_address(__pos), std::move(*__i));
     }
   }
-  std::move_backward(__from_s, __from_s + __n, __old_last);
+  std::move_backward(__from_s, __from_s + __n, __old_last);  // 前半段向右移动到恰好仍位于已初始化内存 => 用 move_backward() 来移动 (不能用 move，因为两个区间可能有小部分重叠)
 }
 
 template <class _Tp, class _Allocator>
 _LIBCPP_CONSTEXPR_SINCE_CXX20 typename vector<_Tp, _Allocator>::iterator
-vector<_Tp, _Allocator>::insert(const_iterator __position, const_reference __x) {
+vector<_Tp, _Allocator>::insert(const_iterator __position, const_reference __x) {  // single-insert 左值引用版
   pointer __p = this->__begin_ + (__position - begin());
-  if (this->__end_ < this->__end_cap()) {
-    if (__p == this->__end_) {
+  if (this->__end_ < this->__end_cap()) {  // Case 1. 有空间剩余，无需扩容
+    if (__p == this->__end_) {  // 有空间剩余，且在尾部插入 => 直接构造到尾部
       __construct_one_at_end(__x);
-    } else {
+    } else {  // 有空间剩余，但在中间位置插入 => 将尾部区间整体右移一位，再赋值
       __move_range(__p, this->__end_, __p + 1);
       const_pointer __xr = pointer_traits<const_pointer>::pointer_to(__x);
       if (std::__is_pointer_in_range(std::__to_address(__p), std::__to_address(__end_), std::addressof(__x)))
-        ++__xr;
+        ++__xr;  // 此处 if 旨在检查 __x 引用指向的是否是尾部 [position, end) 区间内会被整体向后移动的元素！一旦该区间移动后，该引用所引用的值将是 unspecified! 因此，如果是这种情形，直接将对应的指针也向后移动 n 位即可。
       *__p = *__xr;
     }
-  } else {
+  } else {  // 2. 没有空间剩余：需要扩容，clang 使用 copy-and-swap idiom，是 copy 到一个自定义的 buffer 中再 swap
     allocator_type& __a = this->__alloc();
-    __split_buffer<value_type, allocator_type&> __v(__recommend(size() + 1), __p - this->__begin_, __a);
-    __v.push_back(__x);
-    __p = __swap_out_circular_buffer(__v, __p);
+    __split_buffer<value_type, allocator_type&> __v(__recommend(size() + 1), __p - this->__begin_, __a);  // 构造 buffer，在 buffer 头部预留出 __p - this->__begin_ 个空间，用于容纳 vector 插入位置 __p 之前的元素
+    __v.push_back(__x);  // 既然此前 vector push_back() 扩容插入函数 __push_back_slow_path() 中此处将 push_back() 优化为了两句手动构造，那为何此处不优化为两句手动代码呢？
+    __p = __swap_out_circular_buffer(__v, __p);  // 分别将 vector 插入位置 __p 前后两段批量移动 (or 拷贝) 到 buffer 前后对应位置，再与当前 vector swap。
   }
   return __make_iter(__p);
 }
 
 template <class _Tp, class _Allocator>
 _LIBCPP_CONSTEXPR_SINCE_CXX20 typename vector<_Tp, _Allocator>::iterator
-vector<_Tp, _Allocator>::insert(const_iterator __position, value_type&& __x) {
+vector<_Tp, _Allocator>::insert(const_iterator __position, value_type&& __x) {  // single-insert 右值引用版
   pointer __p = this->__begin_ + (__position - begin());
   if (this->__end_ < this->__end_cap()) {
     if (__p == this->__end_) {
@@ -1665,45 +1665,45 @@ template <class... _Args>
 _LIBCPP_CONSTEXPR_SINCE_CXX20 typename vector<_Tp, _Allocator>::iterator
 vector<_Tp, _Allocator>::emplace(const_iterator __position, _Args&&... __args) {
   pointer __p = this->__begin_ + (__position - begin());
-  if (this->__end_ < this->__end_cap()) {
-    if (__p == this->__end_) {
+  if (this->__end_ < this->__end_cap()) {  // Case 1. 有空间剩余，无需扩容
+    if (__p == this->__end_) {  // 有空间剩余，且在尾部插入 => 直接构造到尾部
       __construct_one_at_end(std::forward<_Args>(__args)...);
-    } else {
+    } else {  // 有空间剩余，但在中间位置插入 => 将尾部区间整体右移一位，再赋值
       __temp_value<value_type, _Allocator> __tmp(this->__alloc(), std::forward<_Args>(__args)...);
       __move_range(__p, this->__end_, __p + 1);
       *__p = std::move(__tmp.get());
     }
-  } else {
+  } else { // Case 2. 没有空间剩余：需要扩容，clang 使用 copy-and-swap idiom，是 copy 到一个自定义的 buffer 中再 swap
     allocator_type& __a = this->__alloc();
     __split_buffer<value_type, allocator_type&> __v(__recommend(size() + 1), __p - this->__begin_, __a);
     __v.emplace_back(std::forward<_Args>(__args)...);
-    __p = __swap_out_circular_buffer(__v, __p);
+    __p = __swap_out_circular_buffer(__v, __p); // 分别将 vector 插入位置 __p 前后两段批量移动 (or 拷贝) 到 buffer 前后对应位置，再与当前 vector swap
   }
   return __make_iter(__p);
 }
 
 template <class _Tp, class _Allocator>
 _LIBCPP_CONSTEXPR_SINCE_CXX20 typename vector<_Tp, _Allocator>::iterator
-vector<_Tp, _Allocator>::insert(const_iterator __position, size_type __n, const_reference __x) {
+vector<_Tp, _Allocator>::insert(const_iterator __position, size_type __n, const_reference __x) {  // Batch-insert
   pointer __p = this->__begin_ + (__position - begin());
   if (__n > 0) {
     // We can't compare unrelated pointers inside constant expressions
-    if (!__libcpp_is_constant_evaluated() && __n <= static_cast<size_type>(this->__end_cap() - this->__end_)) {
+    if (!__libcpp_is_constant_evaluated() && __n <= static_cast<size_type>(this->__end_cap() - this->__end_)) {  // Case 1: 尾部剩余空间足够容纳新增 n 个元素
       size_type __old_n  = __n;
       pointer __old_last = this->__end_;
-      if (__n > static_cast<size_type>(this->__end_ - __p)) {
+      if (__n > static_cast<size_type>(this->__end_ - __p)) {  // 当 n 大于插入位置之后尾部区间现有元素个数时，先将需要插入到尾部未初始化内存的 cx 个元素构造出来，最终只剩下 n - cx 个 x 需要赋值到已初始化内存！
         size_type __cx = __n - (this->__end_ - __p);
-        __construct_at_end(__cx, __x);
+        __construct_at_end(__cx, __x); 
         __n -= __cx;
       }
-      if (__n > 0) {
+      if (__n > 0) {  // 运行到此处时，需要插入的元素个数 n 必然满足 <= 尾部现有元素个数！
         __move_range(__p, __old_last, __p + __old_n);
         const_pointer __xr = pointer_traits<const_pointer>::pointer_to(__x);
-        if (__p <= __xr && __xr < this->__end_)
+        if (__p <= __xr && __xr < this->__end_)  // 此处 if 旨在检查 __x 引用指向的是否是尾部 [position, end) 区间内会被整体向后移动的元素！一旦该区间移动后，该引用所引用的值将是 unspecified! 因此，如果是这种情形，直接将对应的指针也向后移动 n 位即可。
           __xr += __old_n;
         std::fill_n(__p, __n, *__xr);
       }
-    } else {
+    } else {  // Case 2: 尾部内存容量 < n => reallocation. clang 使用了 copy-and-swap idiom
       allocator_type& __a = this->__alloc();
       __split_buffer<value_type, allocator_type&> __v(__recommend(size() + __n), __p - this->__begin_, __a);
       __v.__construct_at_end(__n, __x);
@@ -1716,8 +1716,8 @@ template <class _Tp, class _Allocator>
 template <class _InputIterator,
           __enable_if_t<__has_exactly_input_iterator_category<_InputIterator>::value &&
                             is_constructible<_Tp, typename iterator_traits<_InputIterator>::reference>::value,
-                        int> >
-_LIBCPP_CONSTEXPR_SINCE_CXX20 typename vector<_Tp, _Allocator>::iterator
+                        int> >     
+_LIBCPP_CONSTEXPR_SINCE_CXX20 typename vector<_Tp, _Allocator>::iterator   // Range-insert with input_iterator_tag
 vector<_Tp, _Allocator>::insert(const_iterator __position, _InputIterator __first, _InputIterator __last) {
   return __insert_with_sentinel(__position, __first, __last);
 }
@@ -1730,8 +1730,8 @@ vector<_Tp, _Allocator>::__insert_with_sentinel(const_iterator __position, _Inpu
   pointer __p           = this->__begin_ + __off;
   allocator_type& __a   = this->__alloc();
   pointer __old_last    = this->__end_;
-  for (; this->__end_ != this->__end_cap() && __first != __last; ++__first) {
-    __construct_one_at_end(*__first);
+  for (; this->__end_ != this->__end_cap() && __first != __last; ++__first) {  
+    __construct_one_at_end(*__first); // 先插入一部分数据到现有 vector 的尾部，直至尾部剩余内存耗尽为止。__construct_one_at_end() 会改变 this->__end_ 指针，但不会改变 this->__begin_
   }
   __split_buffer<value_type, allocator_type&> __v(__a);
   if (__first != __last) {
@@ -1739,10 +1739,10 @@ vector<_Tp, _Allocator>::__insert_with_sentinel(const_iterator __position, _Inpu
     try {
 #endif // _LIBCPP_HAS_EXCEPTIONS
       __v.__construct_at_end_with_sentinel(std::move(__first), std::move(__last));
-      difference_type __old_size = __old_last - this->__begin_;
-      difference_type __old_p    = __p - this->__begin_;
-      reserve(__recommend(size() + __v.size()));
-      __p        = this->__begin_ + __old_p;
+      difference_type __old_size = __old_last - this->__begin_;  
+      difference_type __old_p    = __p - this->__begin_;  // 截止到此处，this->__begin_, __p 均未改变，因此，old_p 正是前面的 __off，故这一步重新计算 __old_p 完全是多余的！下面在计算 __p 时直接用 __off 代替 __old_p 即可。
+      reserve(__recommend(size() + __v.size()));  // 此处 reserve() 会导致一次扩容，故会改变 this->__begin_, this->__end_, __p，因此，需要下面重新计算它们
+      __p        = this->__begin_ + __old_p;  // 此处需要重新计算 __p 和 __old_last 是因为 reserve() 会改变 this->__begin_, this->__end_
       __old_last = this->__begin_ + __old_size;
 #if _LIBCPP_HAS_EXCEPTIONS
     } catch (...) {
@@ -1751,7 +1751,7 @@ vector<_Tp, _Allocator>::__insert_with_sentinel(const_iterator __position, _Inpu
     }
 #endif // _LIBCPP_HAS_EXCEPTIONS
   }
-  __p = std::rotate(__p, __old_last, this->__end_);
+  __p = std::rotate(__p, __old_last, this->__end_);  // 此实现有改进空间！既然都要扩容了，就应该在扩容的同时一次性将 [__old_p, __old_last] 和 [__old_last, this->__end_）放到正确的位置，从而避免了此处不必要的 rotate! 也就是说只有前面那种无需扩容的情形才需要最终的 rotate()
   insert(__make_iter(__p), std::make_move_iterator(__v.begin()), std::make_move_iterator(__v.end()));
   return begin() + __off;
 }
@@ -1760,7 +1760,7 @@ template <class _Tp, class _Allocator>
 template <class _ForwardIterator,
           __enable_if_t<__has_forward_iterator_category<_ForwardIterator>::value &&
                             is_constructible<_Tp, typename iterator_traits<_ForwardIterator>::reference>::value,
-                        int> >
+                        int> >       // Range-insert with forward_iterator_tag
 _LIBCPP_CONSTEXPR_SINCE_CXX20 typename vector<_Tp, _Allocator>::iterator
 vector<_Tp, _Allocator>::insert(const_iterator __position, _ForwardIterator __first, _ForwardIterator __last) {
   return __insert_with_size(__position, __first, __last, std::distance(__first, __last));
@@ -1770,27 +1770,27 @@ template <class _Tp, class _Allocator>
 template <class _Iterator, class _Sentinel>
 _LIBCPP_CONSTEXPR_SINCE_CXX20 _LIBCPP_HIDE_FROM_ABI typename vector<_Tp, _Allocator>::iterator
 vector<_Tp, _Allocator>::__insert_with_size(
-    const_iterator __position, _Iterator __first, _Sentinel __last, difference_type __n) {
+    const_iterator __position, _Iterator __first, _Sentinel __last, difference_type __n) {  // range-insert 在调用此函数时，传入的 n = distance(first, last)
   auto __insertion_size = __n;
   pointer __p           = this->__begin_ + (__position - begin());
   if (__n > 0) {
-    if (__n <= this->__end_cap() - this->__end_) {
+    if (__n <= this->__end_cap() - this->__end_) {  // Case 1: 尾部剩余空间足够容纳新增 n 个元素
       size_type __old_n    = __n;
       pointer __old_last   = this->__end_;
       _Iterator __m        = std::next(__first, __n);
       difference_type __dx = this->__end_ - __p;
-      if (__n > __dx) {
+      if (__n > __dx) { // 当 n 大于插入位置之后尾部区间现有元素个数时，先将需要插入到尾部未初始化内存的元素构造出来，最终只剩下需要赋值到已初始化内存！
         __m                    = __first;
         difference_type __diff = this->__end_ - __p;
         std::advance(__m, __diff);
-        __construct_at_end(__m, __last, __n - __diff);
+        __construct_at_end(__m, __last, __n - __diff);  // 先将需要插入到尾部未初始化内存的元素构造出来
         __n = __dx;
       }
-      if (__n > 0) {
+      if (__n > 0) {  // 运行到此处时，需要插入的元素个数 n 必然满足 <= 尾部现有元素个数！
         __move_range(__p, __old_last, __p + __old_n);
         std::copy(__first, __m, __p);
       }
-    } else {
+    } else {  // Case 2: 尾部剩余容量 < n => reallocation, clang 使用 copy-and-swap idiom
       allocator_type& __a = this->__alloc();
       __split_buffer<value_type, allocator_type&> __v(__recommend(size() + __n), __p - this->__begin_, __a);
       __v.__construct_at_end_with_size(__first, __insertion_size);
@@ -1890,7 +1890,7 @@ private:
 
   __storage_pointer __begin_;
   size_type __size_;
-  _LIBCPP_COMPRESSED_PAIR(size_type, __cap_, __storage_allocator, __alloc_);
+  _LIBCPP_COMPRESSED_PAIR(size_type, __cap_, __storage_allocator, __alloc_);  // 此处相当于用 [[no_unique_address]] 来定义了 __cap_, __alloc_ 两个成员，故这两个成员是 vector 的顶层成员，可以直接访问！不再需要 __alloc() 和 __end_cap() 这些 getter 函数了！
 
 public:
   typedef __bit_reference<vector> reference;
@@ -1901,7 +1901,7 @@ public:
 #endif
 
 private:
-  // TODO: Remove these now redundant accessors
+  // TODO: Remove these now redundant accessors 正是由于 __cap_ 和 __alloc_ 已经成为 vector 的顶层成员，故这些 getters 函数 __cap(), __alloc() 就不再需要了！
   _LIBCPP_HIDE_FROM_ABI _LIBCPP_CONSTEXPR_SINCE_CXX20 size_type& __cap() _NOEXCEPT { return __cap_; }
   _LIBCPP_HIDE_FROM_ABI _LIBCPP_CONSTEXPR_SINCE_CXX20 const size_type& __cap() const _NOEXCEPT { return __cap_; }
   _LIBCPP_HIDE_FROM_ABI _LIBCPP_CONSTEXPR_SINCE_CXX20 __storage_allocator& __alloc() _NOEXCEPT { return __alloc_; }
@@ -2178,7 +2178,7 @@ private:
 
   template <class _InputIterator, class _Sentinel>
   _LIBCPP_HIDE_FROM_ABI _LIBCPP_CONSTEXPR_SINCE_CXX20 void
-  __init_with_size(_InputIterator __first, _Sentinel __last, size_type __n) {
+  __init_with_size(_InputIterator __first, _Sentinel __last, size_type __n) {  // 供 range-ctor with forward_iterator_tag 调用
     auto __guard = std::__make_exception_guard(__destroy_vector(*this));
 
     if (__n > 0) {
@@ -2191,7 +2191,7 @@ private:
 
   template <class _InputIterator, class _Sentinel>
   _LIBCPP_HIDE_FROM_ABI _LIBCPP_CONSTEXPR_SINCE_CXX20 void
-  __init_with_sentinel(_InputIterator __first, _Sentinel __last) {
+  __init_with_sentinel(_InputIterator __first, _Sentinel __last) {  // 供 range-ctor with input_iterator_tag 调用
 #if _LIBCPP_HAS_EXCEPTIONS
     try {
 #endif // _LIBCPP_HAS_EXCEPTIONS

@@ -29,8 +29,8 @@ struct __temp_value {
   typename aligned_storage<sizeof(_Tp), _LIBCPP_ALIGNOF(_Tp)>::type __v;
 #else
   union {
-    _Tp __v;
-  };
+    _Tp __v; // anonymous union 只有一个数据成员，那这和直接定义为 class 的成员有何区别？
+  };  
 #endif
   _Alloc& __a;
 

@@ -63,9 +63,9 @@ inline _LIBCPP_HIDE_FROM_ABI pair<_InputIterator, _ForwardIterator> __uninitiali
   try {
 #endif
     for (; __ifirst != __ilast && !__stop_copying(__idx); ++__ifirst, (void)++__idx)
-      ::new (static_cast<void*>(std::addressof(*__idx))) _ValueType(*__ifirst);
+      ::new (static_cast<void*>(std::addressof(*__idx))) _ValueType(*__ifirst);  // copy-ctor
 #if _LIBCPP_HAS_EXCEPTIONS
-  } catch (...) {
+  } catch (...) {  // 强异常安全保障
     std::__destroy(__ofirst, __idx);
     throw;
   }
@@ -93,9 +93,9 @@ __uninitialized_copy_n(_InputIterator __ifirst, _Size __n, _ForwardIterator __of
   try {
 #endif
     for (; __n > 0 && !__stop_copying(__idx); ++__ifirst, (void)++__idx, (void)--__n)
-      ::new (static_cast<void*>(std::addressof(*__idx))) _ValueType(*__ifirst);
+      ::new (static_cast<void*>(std::addressof(*__idx))) _ValueType(*__ifirst);  // copy-ctor
 #if _LIBCPP_HAS_EXCEPTIONS
-  } catch (...) {
+  } catch (...) {  // 强异常安全保障
     std::__destroy(__ofirst, __idx);
     throw;
   }
@@ -123,9 +123,9 @@ __uninitialized_fill(_ForwardIterator __first, _Sentinel __last, const _Tp& __x)
   try {
 #endif
     for (; __idx != __last; ++__idx)
-      ::new (static_cast<void*>(std::addressof(*__idx))) _ValueType(__x);
+      ::new (static_cast<void*>(std::addressof(*__idx))) _ValueType(__x); // copy-ctor
 #if _LIBCPP_HAS_EXCEPTIONS
-  } catch (...) {
+  } catch (...) {  // 强异常安全保障
     std::__destroy(__first, __idx);
     throw;
   }
@@ -151,9 +151,9 @@ __uninitialized_fill_n(_ForwardIterator __first, _Size __n, const _Tp& __x) {
   try {
 #endif
     for (; __n > 0; ++__idx, (void)--__n)
-      ::new (static_cast<void*>(std::addressof(*__idx))) _ValueType(__x);
+      ::new (static_cast<void*>(std::addressof(*__idx))) _ValueType(__x);  // copy-ctor
 #if _LIBCPP_HAS_EXCEPTIONS
-  } catch (...) {
+  } catch (...) {  // 强异常安全保障
     std::__destroy(__first, __idx);
     throw;
   }
@@ -181,9 +181,9 @@ __uninitialized_default_construct(_ForwardIterator __first, _Sentinel __last) {
   try {
 #  endif
     for (; __idx != __last; ++__idx)
-      ::new (static_cast<void*>(std::addressof(*__idx))) _ValueType;
+      ::new (static_cast<void*>(std::addressof(*__idx))) _ValueType;  // default-ctor for class-types; uninitialized for non-class types
 #  if _LIBCPP_HAS_EXCEPTIONS
-  } catch (...) {
+  } catch (...) {  // 强异常安全保障
     std::__destroy(__first, __idx);
     throw;
   }
@@ -207,9 +207,9 @@ inline _LIBCPP_HIDE_FROM_ABI _ForwardIterator __uninitialized_default_construct_
   try {
 #  endif
     for (; __n > 0; ++__idx, (void)--__n)
-      ::new (static_cast<void*>(std::addressof(*__idx))) _ValueType;
+      ::new (static_cast<void*>(std::addressof(*__idx))) _ValueType; // default-ctor for class-types; uninitialized for non-class types
 #  if _LIBCPP_HAS_EXCEPTIONS
-  } catch (...) {
+  } catch (...) {  // 强异常安全保障
     std::__destroy(__first, __idx);
     throw;
   }
@@ -236,7 +236,7 @@ __uninitialized_value_construct(_ForwardIterator __first, _Sentinel __last) {
     for (; __idx != __last; ++__idx)
       ::new (static_cast<void*>(std::addressof(*__idx))) _ValueType();
 #  if _LIBCPP_HAS_EXCEPTIONS
-  } catch (...) {
+  } catch (...) {  // 强异常安全保障
     std::__destroy(__first, __idx);
     throw;
   }
@@ -260,9 +260,9 @@ inline _LIBCPP_HIDE_FROM_ABI _ForwardIterator __uninitialized_value_construct_n(
   try {
 #  endif
     for (; __n > 0; ++__idx, (void)--__n)
-      ::new (static_cast<void*>(std::addressof(*__idx))) _ValueType();
+      ::new (static_cast<void*>(std::addressof(*__idx))) _ValueType(); // default-ctor for class-types; zero-initialization for non-class types
 #  if _LIBCPP_HAS_EXCEPTIONS
-  } catch (...) {
+  } catch (...) {  // 强异常安全保障
     std::__destroy(__first, __idx);
     throw;
   }
@@ -296,10 +296,10 @@ inline _LIBCPP_HIDE_FROM_ABI pair<_InputIterator, _ForwardIterator> __uninitiali
   try {
 #  endif
     for (; __ifirst != __ilast && !__stop_moving(__idx); ++__idx, (void)++__ifirst) {
-      ::new (static_cast<void*>(std::addressof(*__idx))) _ValueType(__iter_move(__ifirst));
+      ::new (static_cast<void*>(std::addressof(*__idx))) _ValueType(__iter_move(__ifirst));  // move-ctor
     }
 #  if _LIBCPP_HAS_EXCEPTIONS
-  } catch (...) {
+  } catch (...) {  // basic exception safety guarantee: 一旦批量移动中途抛出异常，只需析构目标内存区即可恢复目标内存，但无法确保恢复源数据内存！因为已经移走的数据无法确保能安全地重新移回去！
     std::__destroy(__ofirst, __idx);
     throw;
   }
@@ -334,9 +334,9 @@ inline _LIBCPP_HIDE_FROM_ABI pair<_InputIterator, _ForwardIterator> __uninitiali
   try {
 #  endif
     for (; __n > 0 && !__stop_moving(__idx); ++__idx, (void)++__ifirst, --__n)
-      ::new (static_cast<void*>(std::addressof(*__idx))) _ValueType(__iter_move(__ifirst));
+      ::new (static_cast<void*>(std::addressof(*__idx))) _ValueType(__iter_move(__ifirst));  // move-ctor
 #  if _LIBCPP_HAS_EXCEPTIONS
-  } catch (...) {
+  } catch (...) {  // basic exception safety guarantee: 一旦批量移动中途抛出异常，只需析构目标内存区即可恢复目标内存，但无法确保恢复源数据内存！因为已经移走的数据无法确保能安全地重新移回去！
     std::__destroy(__ofirst, __idx);
     throw;
   }
@@ -569,22 +569,22 @@ template <class _Alloc,
                         int> = 0>
 _LIBCPP_HIDE_FROM_ABI _LIBCPP_CONSTEXPR_SINCE_CXX20 _Out*
 __uninitialized_allocator_copy_impl(_Alloc&, _In* __first1, _In* __last1, _Out* __first2) {
-  if (__libcpp_is_constant_evaluated()) {
+  if (__libcpp_is_constant_evaluated()) {  // 如果能常量表达式求值，则在编译期执行
     while (__first1 != __last1) {
       std::__construct_at(std::__to_address(__first2), *__first1);
       ++__first1;
       ++__first2;
     }
     return __first2;
-  } else {
+  } else {  // 如果不能在编译期执行，则使用 trivial type optimization，即无需构造，直接用 std::copy() 拷贝赋值
     return std::copy(__first1, __last1, __first2);
   }
 }
 
 template <class _Alloc, class _Iter1, class _Sent1, class _Iter2>
 _LIBCPP_HIDE_FROM_ABI _LIBCPP_CONSTEXPR_SINCE_CXX20 _Iter2
-__uninitialized_allocator_copy(_Alloc& __alloc, _Iter1 __first1, _Sent1 __last1, _Iter2 __first2) {
-  auto __unwrapped_range = std::__unwrap_range(__first1, __last1);
+__uninitialized_allocator_copy(_Alloc& __alloc, _Iter1 __first1, _Sent1 __last1, _Iter2 __first2) {  // 将 [first1, last1) 拷贝构造到 [first2, first2+N), where N = distance(first1, last1)
+  auto __unwrapped_range = std::__unwrap_range(__first1, __last1);  // unwrap_range 是将 range 的首尾迭代器 unwrap 成裸指针，让编译器支持对裸指针的优化！
   auto __result          = std::__uninitialized_allocator_copy_impl(
       __alloc, __unwrapped_range.first, __unwrapped_range.second, std::__unwrap_iter(__first2));
   return std::__rewrap_iter(__first2, __result);
@@ -616,7 +616,7 @@ struct __allocator_has_trivial_destroy<allocator<_Tp>, _Up> : true_type {};
 // - __libcpp_is_trivially_relocatable<_Tp>
 template <class _Alloc, class _Tp>
 _LIBCPP_HIDE_FROM_ABI _LIBCPP_CONSTEXPR_SINCE_CXX14 void
-__uninitialized_allocator_relocate(_Alloc& __alloc, _Tp* __first, _Tp* __last, _Tp* __result) {
+__uninitialized_allocator_relocate(_Alloc& __alloc, _Tp* __first, _Tp* __last, _Tp* __result) {  // 此函数是在 vector 扩容时批量搬移用！因此，它只在元素类型 _Tp 是 noexcept 时使用批量移动，否则使用批量拷贝。由于使用移动构造时一定是有 _Tp 的 nothrow 保障，而即使使用拷贝构造也会通过 RAII guard 提供强异常安全保障，因此，本函数整体上提供了强异常安全保障！此外，也做了 trivial-type optimization
   static_assert(__is_cpp17_move_insertable<_Alloc>::value,
                 "The specified type does not meet the requirements of Cpp17MoveInsertable");
   if (__libcpp_is_constant_evaluated() || !__libcpp_is_trivially_relocatable<_Tp>::value ||
@@ -628,7 +628,7 @@ __uninitialized_allocator_relocate(_Alloc& __alloc, _Tp* __first, _Tp* __last, _
     auto __iter = __first;
     while (__iter != __last) {
 #if _LIBCPP_HAS_EXCEPTIONS
-      allocator_traits<_Alloc>::construct(__alloc, __result, std::move_if_noexcept(*__iter));
+      allocator_traits<_Alloc>::construct(__alloc, __result, std::move_if_noexcept(*__iter));  // 当且仅当元素类型是 noexcept，才使用移动构造！否则，退化为拷贝！=> 强异常安全保障
 #else
       allocator_traits<_Alloc>::construct(__alloc, __result, std::move(*__iter));
 #endif
@@ -636,8 +636,8 @@ __uninitialized_allocator_relocate(_Alloc& __alloc, _Tp* __first, _Tp* __last, _
       ++__result;
     }
     __guard.__complete();
-    std::__allocator_destroy(__alloc, __first, __last);
-  } else {
+    std::__allocator_destroy(__alloc, __first, __last);  // 源数据被移动后仍要析构，以防移动退化为拷贝
+  } else {  // trivial type optimization: 直接用 memcpy
     __builtin_memcpy(__result, __first, sizeof(_Tp) * (__last - __first));
   }
 }

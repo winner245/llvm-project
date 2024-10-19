@@ -38,7 +38,7 @@ template <class _Alloc>
 [[__nodiscard__]] _LIBCPP_HIDE_FROM_ABI
 _LIBCPP_CONSTEXPR __allocation_result<typename allocator_traits<_Alloc>::pointer>
 __allocate_at_least(_Alloc& __alloc, size_t __n) {
-  return {__alloc.allocate(__n), __n};
+  return {__alloc.allocate(__n), __n};  // Aggregate initialization: 返回分配内存的首地址和长度
 }
 
 #endif // _LIBCPP_STD_VER >= 23

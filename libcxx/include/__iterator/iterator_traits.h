@@ -131,7 +131,7 @@ private:
   template <class _Up>
   static false_type __test(...);
   template <class _Up>
-  static true_type __test(typename _Up::iterator_category* = nullptr);
+  static true_type __test(typename _Up::iterator_category* = nullptr);  // 当 _Tp::iterator_category 存在时，__test<_Tp>(nullptr) 匹配此版
 
 public:
   static const bool value = decltype(__test<_Tp>(nullptr))::value;
@@ -465,7 +465,7 @@ struct __libcpp_is_contiguous_iterator<_Up*> : true_type {};
 template <class _Iter>
 class __wrap_iter;
 
-template <class _Tp>
+template <class _Tp>  
 using __has_exactly_input_iterator_category =
     integral_constant<bool,
                       __has_iterator_category_convertible_to<_Tp, input_iterator_tag>::value &&

@@ -62,11 +62,11 @@ _LIBCPP_BEGIN_NAMESPACE_STD
 //
 
 template <class _Rollback>
-struct __exception_guard_exceptions {
+struct __exception_guard_exceptions {  // vector ctor RAII guard: 负责为 vector ctor 实现强异常安全保障
   __exception_guard_exceptions() = delete;
 
   _LIBCPP_HIDE_FROM_ABI _LIBCPP_CONSTEXPR_SINCE_CXX20 explicit __exception_guard_exceptions(_Rollback __rollback)
-      : __rollback_(std::move(__rollback)), __completed_(false) {}
+      : __rollback_(std::move(__rollback)), __completed_(false) {}  // RAII guard ctor 负责关联一个 rollback 可调用对象
 
   _LIBCPP_HIDE_FROM_ABI _LIBCPP_CONSTEXPR_SINCE_CXX20
   __exception_guard_exceptions(__exception_guard_exceptions&& __other)
@@ -79,16 +79,16 @@ struct __exception_guard_exceptions {
   __exception_guard_exceptions& operator=(__exception_guard_exceptions const&) = delete;
   __exception_guard_exceptions& operator=(__exception_guard_exceptions&&)      = delete;
 
-  _LIBCPP_HIDE_FROM_ABI _LIBCPP_CONSTEXPR_SINCE_CXX20 void __complete() _NOEXCEPT { __completed_ = true; }
+  _LIBCPP_HIDE_FROM_ABI _LIBCPP_CONSTEXPR_SINCE_CXX20 void __complete() _NOEXCEPT { __completed_ = true; }  // 取消 RAII guard 与 rollback 对象的关联状态
 
   _LIBCPP_HIDE_FROM_ABI _LIBCPP_CONSTEXPR_SINCE_CXX20 ~__exception_guard_exceptions() {
-    if (!__completed_)
+    if (!__completed_)  // RAII guard dtor 负责按需 rollback：当 RAII guard 仍然关联着 rollback 可调用对象时，就无脑执行该可调用对象来析构和释放内存；否则，什么也不做。
       __rollback_();
   }
 
 private:
-  _Rollback __rollback_;
-  bool __completed_;
+  _Rollback __rollback_;	// rollback 可调用对象
+  bool __completed_;   		// 维护 RAII guard 与 rollback 可调用对象的关联状态
 };
 
 _LIBCPP_CTAD_SUPPORTED_FOR_TYPE(__exception_guard_exceptions);

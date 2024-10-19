@@ -45,8 +45,8 @@ private:
 
 public:
   _LIBCPP_HIDE_FROM_ABI _LIBCPP_CONSTEXPR_SINCE_CXX14 __wrap_iter() _NOEXCEPT : __i_() {}
-  template <class _Up, __enable_if_t<is_convertible<_Up, iterator_type>::value, int> = 0>
-  _LIBCPP_HIDE_FROM_ABI _LIBCPP_CONSTEXPR_SINCE_CXX14 __wrap_iter(const __wrap_iter<_Up>& __u) _NOEXCEPT
+  template <class _Up, __enable_if_t<is_convertible<_Up, iterator_type>::value, int> = 0>  // conversion-ctor，用于实现 iterator -> const_iterator 转换
+  _LIBCPP_HIDE_FROM_ABI _LIBCPP_CONSTEXPR_SINCE_CXX14 __wrap_iter(const __wrap_iter<_Up>& __u) _NOEXCEPT   
       : __i_(__u.base()) {}
   _LIBCPP_HIDE_FROM_ABI _LIBCPP_CONSTEXPR_SINCE_CXX14 reference operator*() const _NOEXCEPT { return *__i_; }
   _LIBCPP_HIDE_FROM_ABI _LIBCPP_CONSTEXPR_SINCE_CXX14 pointer operator->() const _NOEXCEPT {
@@ -93,7 +93,7 @@ public:
 
   _LIBCPP_HIDE_FROM_ABI _LIBCPP_CONSTEXPR_SINCE_CXX14 iterator_type base() const _NOEXCEPT { return __i_; }
 
-private:
+private:   // __wrap_iter ctor 被定义为 private 非常合理！这可以禁止用户使用此类！而 STL vector/string 等容器内部 begin() 是使用此 private ctor！故 __wrap_iter 需要将使用它的容器声明为友元！
   _LIBCPP_HIDE_FROM_ABI _LIBCPP_CONSTEXPR_SINCE_CXX14 explicit __wrap_iter(iterator_type __x) _NOEXCEPT : __i_(__x) {}
 
   template <class _Up>
@@ -103,7 +103,7 @@ private:
   template <class _CharT, class _Traits>
   friend class basic_string_view;
   template <class _Tp, class _Alloc>
-  friend class _LIBCPP_TEMPLATE_VIS vector;
+  friend class _LIBCPP_TEMPLATE_VIS vector;   // 由于 __wrap_iter 的 ctor 是 private，故 clang 需要将凡是使用此类的容器声明为友元，包括 vector/array/string/string_view/span
   template <class _Tp, size_t>
   friend class _LIBCPP_TEMPLATE_VIS span;
   template <class _Tp, size_t _Size>
